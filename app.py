@@ -183,7 +183,6 @@ uploaded_file = st.file_uploader("Choose a KML or KMZ file", type=["kml", "kmz"]
 detected_zone = None
 detected_epsg = None
 
-# Quick background check of uploaded file coordinates
 if uploaded_file is not None:
   with tempfile.TemporaryDirectory() as tmpdir:
     input_path = os.path.join(tmpdir, uploaded_file.name)
@@ -207,7 +206,6 @@ if uploaded_file is not None:
           else:
             temp_gdf = temp_gdf.to_crs(epsg=4326)
           centroid = temp_gdf.unary_union.centroid
-          # Standard East/West Meridian boundary split roughly at -83.25°
           if centroid.x >= -83.25:
             detected_zone = "East"
             detected_epsg = 2239
@@ -217,49 +215,85 @@ if uploaded_file is not None:
       except Exception:
         pass
 
-st.markdown("### ⚙️ Coordinate System & County Options")
+st.markdown("### ⚙️ County & Zone Options")
 
-# County Selection (Left blank by default unless chosen)
+multi_county = st.checkbox("My data crosses multiple counties")
 sorted_counties = sorted(list(GA_COUNTY_ZONES.keys()))
-county_options = ["-- Select County (Optional) --"] + sorted_counties
-selected_county = st.selectbox("Georgia County:", county_options)
+target_epsgs = []
 
-# Manual Zone Override ("Or" option)
-zone_override = st.selectbox(
-    "Coordinate System Zone (Override):",
-    [
-        "Auto-Detect / Match File Location",
-        "Georgia East Zone (EPSG: 2239 - US Ft)",
-        "Georgia West Zone (EPSG: 2240 - US Ft)",
-    ],
-)
-
-# Logic to determine active target EPSG
-if selected_county != "-- Select County (Optional) --":
-  target_epsg = GA_COUNTY_ZONES[selected_county]
-elif zone_override == "Georgia East Zone (EPSG: 2239 - US Ft)":
-  target_epsg = 2239
-elif zone_override == "Georgia West Zone (EPSG: 2240 - US Ft)":
-  target_epsg = 2240
-elif detected_epsg is not None:
-  target_epsg = detected_epsg
-else:
-  target_epsg = 2240  # Default fallback
-
-# Conflict warning check against GDOT specifications
-if detected_epsg is not None and zone_override != "Auto-Detect / Match File Location":
-  user_chosen_zone = "East" if target_epsg == 2239 else "West"
-  if user_chosen_zone != detected_zone:
-    st.warning(
-        f"⚠️ **GDOT Compliance Warning:** Your uploaded file geometry maps to the "
-        f"**{detected_zone} Zone**, but you manually selected the **{user_chosen_zone} Zone**. "
-        f"Per the [GDOT MicroStation CAD and WMS Imagery Services Manual (Page 4 Map)]"
-        f"(https://www.dot.ga.gov/PartnerSmart/DesignManuals/ElectronicData/GDOT_MicroStation-Cad-WMS-Imagery-Services.pdf), "
-        f"using a zone contrary to your geographic location will introduce linear distortions and alignment shifts in OpenRoads."
+if multi_county:
+  selected_counties = st.multiselect(
+      "Select all counties your project crosses:",
+      sorted_counties,
+      default=[],
+      placeholder="Search and select counties...",
+  )
+  if selected_counties:
+    target_epsgs = list(
+        set(GA_COUNTY_ZONES[county] for county in selected_counties)
     )
+    zones_display = ", ".join(
+        [
+            "East Zone (2239)" if z == 2239 else "West Zone (2240)"
+            for z in target_epsgs
+        ]
+    )
+    st.info(
+        f"Selected counties cover: **{zones_display}**."
+        " If both zones are represented, the app will automatically split and"
+        " export separate East and West zip bundles."
+    )
+  else:
+    st.warning("Please select at least one county for your multi-county run.")
+else:
+  # County box starts completely empty (index=None) until clicked/typed into
+  selected_county = st.selectbox(
+      "Georgia County (Optional):",
+      sorted_counties,
+      index=None,
+      placeholder="Click to type or select a county...",
+  )
+
+  # Manual Zone Override ("Or" option)
+  zone_override = st.selectbox(
+      "Coordinate System Zone (Override):",
+      [
+          "Auto-Detect / Match File Location",
+          "Georgia East Zone (EPSG: 2239 - US Ft)",
+          "Georgia West Zone (EPSG: 2240 - US Ft)",
+      ],
+  )
+
+  if selected_county:
+    target_epsgs = [GA_COUNTY_ZONES[selected_county]]
+  elif zone_override == "Georgia East Zone (EPSG: 2239 - US Ft)":
+    target_epsgs = [2239]
+  elif zone_override == "Georgia West Zone (EPSG: 2240 - US Ft)":
+    target_epsgs = [2240]
+  elif detected_epsg is not None:
+    target_epsgs = [detected_epsg]
+  else:
+    target_epsgs = [2240]
+
+  # Conflict warning check against GDOT specifications
+  if detected_epsg is not None and zone_override != "Auto-Detect / Match File Location":
+    chosen_epsg = target_epsgs[0]
+    user_chosen_zone = "East" if chosen_epsg == 2239 else "West"
+    if user_chosen_zone != detected_zone:
+      st.warning(
+          f"⚠️ **GDOT Compliance Warning:** Your uploaded file geometry maps to the "
+          f"**{detected_zone} Zone**, but you manually selected the **{user_chosen_zone} Zone**. "
+          f"Per the [GDOT MicroStation CAD and WMS Imagery Services Manual (Page 4 Map)]"
+          f"(https://www.dot.ga.gov/PartnerSmart/DesignManuals/ElectronicData/GDOT_MicroStation-Cad-WMS-Imagery-Services.pdf), "
+          f"using a zone contrary to your geographic location will introduce linear distortions and alignment shifts in OpenRoads."
+      )
 
 if uploaded_file is not None and st.button("Convert to Shapefile (.zip)"):
-  with st.spinner("Processing spatial conversion..."):
+  if multi_county and not selected_counties:
+    st.error("Please select at least one county.")
+    st.stop()
+
+  with st.spinner("Processing coordinate conversion..."):
     with tempfile.TemporaryDirectory() as tmpdir:
       input_path = os.path.join(tmpdir, uploaded_file.name)
       with open(input_path, "wb") as f:
@@ -284,35 +318,109 @@ if uploaded_file is not None and st.button("Convert to Shapefile (.zip)"):
         else:
           gdf = gdf.to_crs(epsg=4326)
 
-        # Reproject data to chosen target CRS
-        gdf = gdf.to_crs(epsg=target_epsg)
+        # Handle mixed zones if multi-county spans both East and West
+        if multi_county and set(target_epsgs) == {2239, 2240}:
+          st.write(
+              "✂️ Selected counties span both East and West zones. Splitting"
+              " dataset across zones..."
+          )
+          centroids = gdf.geometry.centroid
+          east_gdf = gdf[centroids.x >= -83.25].copy()
+          west_gdf = gdf[centroids.x < -83.25].copy()
 
-        shp_path = os.path.join(tmpdir, "converted_features.shp")
-        gdf.to_file(shp_path, driver="ESRI Shapefile")
+          # East Package
+          if not east_gdf.empty:
+            east_gdf = east_gdf.to_crs(epsg=2239)
+            east_shp = os.path.join(tmpdir, "East_Zone_features.shp")
+            east_gdf.to_file(east_shp, driver="ESRI Shapefile")
 
-        zip_output_path = os.path.join(tmpdir, "shapefiles.zip")
-        with zipfile.ZipFile(zip_output_path, "w") as zip_out:
-          for ext in [".shp", ".shx", ".dbf", ".prj", ".cpg"]:
-            part_file = os.path.join(tmpdir, f"converted_features{ext}")
-            if os.path.exists(part_file):
-              zip_out.write(part_file, arcname=f"converted_features{ext}")
+            east_zip = os.path.join(tmpdir, "GA_East_Zone_Shapefiles.zip")
+            with zipfile.ZipFile(east_zip, "w") as zip_out:
+              for ext in [".shp", ".shx", ".dbf", ".prj", ".cpg"]:
+                part = os.path.join(tmpdir, f"East_Zone_features{ext}")
+                if os.path.exists(part):
+                  zip_out.write(part, arcname=f"GA_East_Zone_features{ext}")
 
-        with open(zip_output_path, "rb") as fp:
-          zip_bytes = fp.read()
+            with open(east_zip, "rb") as f:
+              east_bytes = f.read()
 
-        zone_label = (
-            "Georgia East (EPSG:2239)"
-            if target_epsg == 2239
-            else "Georgia West (EPSG:2240)"
-        )
-        st.success(f"Conversion successful using **{zone_label}**!")
+            st.success("✅ East Zone dataset created successfully!")
+            st.download_button(
+                label=(
+                    "📥 Download East Zone Shapefiles (.zip) [EPSG:2239 - US"
+                    " Ft]"
+                ),
+                data=east_bytes,
+                file_name="GA_East_Zone_OpenRoads.zip",
+                mime="application/zip",
+            )
+          else:
+            st.info(
+                "No features matched the Eastern zone geographic footprint."
+            )
 
-        st.download_button(
-            label="📥 Download Zipped Shapefiles (.zip)",
-            data=zip_bytes,
-            file_name="GA_OpenRoads_Shapefiles.zip",
-            mime="application/zip",
-        )
+          # West Package
+          if not west_gdf.empty:
+            west_gdf = west_gdf.to_crs(epsg=2240)
+            west_shp = os.path.join(tmpdir, "West_Zone_features.shp")
+            west_gdf.to_file(west_shp, driver="ESRI Shapefile")
+
+            west_zip = os.path.join(tmpdir, "GA_West_Zone_Shapefiles.zip")
+            with zipfile.ZipFile(west_zip, "w") as zip_out:
+              for ext in [".shp", ".shx", ".dbf", ".prj", ".cpg"]:
+                part = os.path.join(tmpdir, f"West_Zone_features{ext}")
+                if os.path.exists(part):
+                  zip_out.write(part, arcname=f"West_Zone_features{ext}")
+
+            with open(west_zip, "rb") as f:
+              west_bytes = f.read()
+
+            st.success("✅ West Zone dataset created successfully!")
+            st.download_button(
+                label=(
+                    "📥 Download West Zone Shapefiles (.zip) [EPSG:2240 - US"
+                    " Ft]"
+                ),
+                data=west_bytes,
+                file_name="GA_West_Zone_OpenRoads.zip",
+                mime="application/zip",
+            )
+          else:
+            st.info(
+                "No features matched the Western zone geographic footprint."
+            )
+
+        else:
+          # Single zone processing
+          single_epsg = target_epsgs[0]
+          gdf = gdf.to_crs(epsg=single_epsg)
+
+          shp_path = os.path.join(tmpdir, "converted_features.shp")
+          gdf.to_file(shp_path, driver="ESRI Shapefile")
+
+          zip_output_path = os.path.join(tmpdir, "shapefiles.zip")
+          with zipfile.ZipFile(zip_output_path, "w") as zip_out:
+            for ext in [".shp", ".shx", ".dbf", ".prj", ".cpg"]:
+              part_file = os.path.join(tmpdir, f"converted_features{ext}")
+              if os.path.exists(part_file):
+                zip_out.write(part_file, arcname=f"converted_features{ext}")
+
+          with open(zip_output_path, "rb") as fp:
+            zip_bytes = fp.read()
+
+          zone_label = (
+              "Georgia East (EPSG:2239)"
+              if single_epsg == 2239
+              else "Georgia West (EPSG:2240)"
+          )
+          st.success(f"Conversion successful using **{zone_label}**!")
+
+          st.download_button(
+              label="📥 Download Zipped Shapefiles (.zip)",
+              data=zip_bytes,
+              file_name="GA_OpenRoads_Shapefiles.zip",
+              mime="application/zip",
+          )
 
       except Exception as e:
         st.error(f"An error occurred during conversion: {e}")
