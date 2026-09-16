@@ -8,30 +8,6 @@ st.set_page_config(
     page_title="GA KML/KMZ to Shapefile Converter", page_icon="🌍"
 )
 
-# Top action bar for Start Over
-col1, col2 = st.columns([6, 1])
-with col2:
-  if st.button("🔄 Start Over", type="secondary"):
-    st.markdown(
-        """
-        <script>
-        document.querySelectorAll('h1, h2, h3, p, label, span, div').forEach((el) => {
-            const angle = (Math.random() - 0.5) * 720;
-            const xMove = (Math.random() - 0.5) * 600;
-            const yMove = 400 + Math.random() * 300;
-            el.style.transition = 'transform 1.5s ease-in, opacity 1.5s ease-in';
-            el.style.transform = `translate(${xMove}px, ${yMove}px) rotate(${angle}deg)`;
-            el.style.opacity = '0';
-        });
-        setTimeout(() => {
-            window.location.reload();
-        }, 2000);
-        </script>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.toast("💥 Shattering page and resetting...", icon="🧹")
-
 st.title("Georgia KML/KMZ to Shapefile Converter")
 st.markdown(
     "Convert Google Earth files (`.kml`/`.kmz`) into **GA State Plane (NAD83,"
@@ -231,6 +207,7 @@ if uploaded_file is not None:
           else:
             temp_gdf = temp_gdf.to_crs(epsg=4326)
           centroid = temp_gdf.unary_union.centroid
+          # Automatic East/West Zone boundary judgment based on longitude
           if centroid.x >= -83.25:
             detected_zone = "East"
             detected_epsg = 2239
