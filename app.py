@@ -5,7 +5,7 @@ import geopandas as gpd
 import streamlit as st
 
 st.set_page_config(
-    page_title="GA KML/KMZ to Shapefile Converter", page_icon="🗺️"
+    page_title="GA KML/KMZ to Shapefile Converter", page_icon="🌍"
 )
 
 st.title("Georgia KML/KMZ to Shapefile Converter")
@@ -303,7 +303,6 @@ else:
           " linear distortions and alignment shifts in OpenRoads."
       )
 
-# Dropdown with no heading, placeholder text, and direct custom text input capabilities via accept_new_options
 feature_selection = st.selectbox(
     "Optional Export Level",
     options=[
@@ -347,7 +346,6 @@ if uploaded_file is not None and st.button("Convert to Shapefile (.zip)"):
         else:
           gdf = gdf.to_crs(epsg=4326)
 
-        # Apply level assignment if an option was selected or a custom one was typed
         if feature_selection:
           if " - " in feature_selection:
             final_level_value = feature_selection.split(" - ")[0].strip()
@@ -359,7 +357,6 @@ if uploaded_file is not None and st.button("Convert to Shapefile (.zip)"):
           gdf["Name"] = final_level_value
           gdf["GDOT_Lvl"] = final_level_value
 
-        # Handle mixed zones if multi-county spans both East and West
         if multi_county and set(target_epsgs) == {2239, 2240}:
           st.write(
               "✂️ Selected counties span both East and West zones. Splitting"
@@ -369,7 +366,6 @@ if uploaded_file is not None and st.button("Convert to Shapefile (.zip)"):
           east_gdf = gdf[centroids.x >= -83.25].copy()
           west_gdf = gdf[centroids.x < -83.25].copy()
 
-          # East Package
           if not east_gdf.empty:
             east_gdf = east_gdf.to_crs(epsg=2239)
             east_shp = os.path.join(tmpdir, "East_Zone_features.shp")
@@ -400,7 +396,6 @@ if uploaded_file is not None and st.button("Convert to Shapefile (.zip)"):
                 "No features matched the Eastern zone geographic footprint."
             )
 
-          # West Package
           if not west_gdf.empty:
             west_gdf = west_gdf.to_crs(epsg=2240)
             west_shp = os.path.join(tmpdir, "West_Zone_features.shp")
