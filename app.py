@@ -254,6 +254,19 @@ else:
       placeholder="Click to type or select a county...",
   )
 
+  # Green region label appears right below when a county is explicitly chosen
+  if selected_county:
+    county_epsg = GA_COUNTY_ZONES[selected_county]
+    zone_name = (
+        "Georgia East (EPSG: 2239)"
+        if county_epsg == 2239
+        else "Georgia West (EPSG: 2240)"
+    )
+    st.success(
+        f"📍 **{selected_county} County** selected -> **{zone_name}** (US Survey"
+        " Feet)"
+    )
+
   # Manual Zone Override ("Or" option)
   zone_override = st.selectbox(
       "Coordinate System Zone (Override):",
@@ -276,16 +289,21 @@ else:
     target_epsgs = [2240]
 
   # Conflict warning check against GDOT specifications
-  if detected_epsg is not None and zone_override != "Auto-Detect / Match File Location":
+  if (
+      detected_epsg is not None
+      and zone_override != "Auto-Detect / Match File Location"
+  ):
     chosen_epsg = target_epsgs[0]
     user_chosen_zone = "East" if chosen_epsg == 2239 else "West"
     if user_chosen_zone != detected_zone:
       st.warning(
-          f"⚠️ **GDOT Compliance Warning:** Your uploaded file geometry maps to the "
-          f"**{detected_zone} Zone**, but you manually selected the **{user_chosen_zone} Zone**. "
-          f"Per the [GDOT MicroStation CAD and WMS Imagery Services Manual (Page 4 Map)]"
-          f"(https://www.dot.ga.gov/PartnerSmart/DesignManuals/ElectronicData/GDOT_MicroStation-Cad-WMS-Imagery-Services.pdf), "
-          f"using a zone contrary to your geographic location will introduce linear distortions and alignment shifts in OpenRoads."
+          f"⚠️ **GDOT Compliance Warning:** Your uploaded file geometry maps"
+          f" to the **{detected_zone} Zone**, but you manually selected the"
+          f" **{user_chosen_zone} Zone**. Per the [GDOT MicroStation CAD and"
+          " WMS Imagery Services Manual (Page 4"
+          " Map)](https://www.dot.ga.gov/PartnerSmart/DesignManuals/ElectronicData/GDOT_MicroStation-Cad-WMS-Imagery-Services.pdf),"
+          " using a zone contrary to your geographic location will introduce"
+          " linear distortions and alignment shifts in OpenRoads."
       )
 
 if uploaded_file is not None and st.button("Convert to Shapefile (.zip)"):
