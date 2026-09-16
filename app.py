@@ -303,33 +303,19 @@ else:
           " linear distortions and alignment shifts in OpenRoads."
       )
 
-st.markdown("### 📐 GDOT Level & ORD Feature Standard")
-
+# Dropdown with no heading, placeholder text, and direct custom text input capabilities via accept_new_options
 feature_selection = st.selectbox(
-    "Select Level / Feature Assignment:",
-    [
+    "Optional Export Level",
+    options=[
         "PROP_E_PAR-PL-Line - existing property line",
         "TOPO_E_TEAP-Line - edge of asphalt pavement",
         "PROP_E_ACL-Line - existing centerline",
-        "Custom Level...",
     ],
-    help=(
-        "Assigns official level strings into attributes readable by OpenRoads"
-        " Designer when referenced."
-    ),
+    index=None,
+    placeholder="optional export level",
+    accept_new_options=True,
+    label_visibility="collapsed",
 )
-
-if feature_selection == "Custom Level...":
-  custom_level_input = st.text_input(
-      "Enter Custom Level / Feature Name:",
-      placeholder="e.g., PROP_E_ROW-Line",
-  )
-  final_level_value = (
-      custom_level_input if custom_level_input else "DEFAULT_LEVEL"
-  )
-else:
-  # Extract code prior to hyphen/description
-  final_level_value = feature_selection.split(" - ")[0].strip()
 
 if uploaded_file is not None and st.button("Convert to Shapefile (.zip)"):
   if multi_county and not selected_counties:
@@ -361,11 +347,17 @@ if uploaded_file is not None and st.button("Convert to Shapefile (.zip)"):
         else:
           gdf = gdf.to_crs(epsg=4326)
 
-        # Inject standard-compliant attribute mapping fields (kept <= 10 characters for DBF shapefile compatibility)
-        gdf["Level"] = final_level_value
-        gdf["Feature"] = final_level_value
-        gdf["Name"] = final_level_value
-        gdf["GDOT_Lvl"] = final_level_value
+        # Apply level assignment if an option was selected or a custom one was typed
+        if feature_selection:
+          if " - " in feature_selection:
+            final_level_value = feature_selection.split(" - ")[0].strip()
+          else:
+            final_level_value = feature_selection.strip()
+
+          gdf["Level"] = final_level_value
+          gdf["Feature"] = final_level_value
+          gdf["Name"] = final_level_value
+          gdf["GDOT_Lvl"] = final_level_value
 
         # Handle mixed zones if multi-county spans both East and West
         if multi_county and set(target_epsgs) == {2239, 2240}:
