@@ -11,7 +11,8 @@ st.set_page_config(
 st.title("Georgia KML/KMZ to Shapefile Converter")
 st.markdown(
     "Convert Google Earth files (`.kml`/`.kmz`) into **GA State Plane (NAD83,"
-    " US Survey Feet)** shapefiles optimized for MicroStation and OpenRoads."
+    " US Survey Feet)** shapefiles optimized for MicroStation and OpenRoads with"
+    " official GDOT level standards mapping."
 )
 
 # Comprehensive dictionary mapping GA counties to their NAD83 State Plane Zone EPSG codes
@@ -246,7 +247,6 @@ if multi_county:
   else:
     st.warning("Please select at least one county for your multi-county run.")
 else:
-  # County box starts completely empty (index=None) until clicked/typed into
   selected_county = st.selectbox(
       "Georgia County (Optional):",
       sorted_counties,
@@ -254,7 +254,6 @@ else:
       placeholder="Click to type or select a county...",
   )
 
-  # Green region label appears right below when a county is explicitly chosen
   if selected_county:
     county_epsg = GA_COUNTY_ZONES[selected_county]
     zone_name = (
@@ -267,7 +266,6 @@ else:
         " Feet)"
     )
 
-  # Manual Zone Override ("Or" option)
   zone_override = st.selectbox(
       "Coordinate System Zone (Override):",
       [
@@ -288,7 +286,6 @@ else:
   else:
     target_epsgs = [2240]
 
-  # Conflict warning check against GDOT specifications
   if (
       detected_epsg is not None
       and zone_override != "Auto-Detect / Match File Location"
@@ -306,12 +303,40 @@ else:
           " linear distortions and alignment shifts in OpenRoads."
       )
 
+st.markdown("### 📐 GDOT Level & ORD Feature Standard")
+
+feature_selection = st.selectbox(
+    "Select Level / Feature Assignment:",
+    [
+        "PROP_E_PAR-PL-Line - existing property line",
+        "TOPO_E_TEAP-Line - edge of asphalt pavement",
+        "PROP_E_ACL-Line - existing centerline",
+        "Custom Level...",
+    ],
+    help=(
+        "Assigns official level strings into attributes readable by OpenRoads"
+        " Designer when referenced."
+    ),
+)
+
+if feature_selection == "Custom Level...":
+  custom_level_input = st.text_input(
+      "Enter Custom Level / Feature Name:",
+      placeholder="e.g., PROP_E_ROW-Line",
+  )
+  final_level_value = (
+      custom_level_input if custom_level_input else "DEFAULT_LEVEL"
+  )
+else:
+  # Extract code prior to hyphen/description
+  final_level_value = feature_selection.split(" - ")[0].strip()
+
 if uploaded_file is not None and st.button("Convert to Shapefile (.zip)"):
   if multi_county and not selected_counties:
     st.error("Please select at least one county.")
     st.stop()
 
-  with st.spinner("Processing coordinate conversion..."):
+  with st.spinner("Processing coordinate conversion and level mapping..."):
     with tempfile.TemporaryDirectory() as tmpdir:
       input_path = os.path.join(tmpdir, uploaded_file.name)
       with open(input_path, "wb") as f:
@@ -335,6 +360,12 @@ if uploaded_file is not None and st.button("Convert to Shapefile (.zip)"):
           gdf.set_crs(epsg=4326, inplace=True)
         else:
           gdf = gdf.to_crs(epsg=4326)
+
+        # Inject standard-compliant attribute mapping fields (kept <= 10 characters for DBF shapefile compatibility)
+        gdf["Level"] = final_level_value
+        gdf["Feature"] = final_level_value
+        gdf["Name"] = final_level_value
+        gdf["GDOT_Lvl"] = final_level_value
 
         # Handle mixed zones if multi-county spans both East and West
         if multi_county and set(target_epsgs) == {2239, 2240}:
@@ -409,7 +440,6 @@ if uploaded_file is not None and st.button("Convert to Shapefile (.zip)"):
             )
 
         else:
-          # Single zone processing
           single_epsg = target_epsgs[0]
           gdf = gdf.to_crs(epsg=single_epsg)
 
