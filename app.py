@@ -179,49 +179,7 @@ GA_COUNTY_ZONES = {
     "Worth": 2240,
 }
 
-# Initialize session state tracking for file clearance
-if "prev_file" not in st.session_state:
-  st.session_state.prev_file = None
-
 uploaded_file = st.file_uploader("Choose a KML or KMZ file", type=["kml", "kmz"])
-
-# Check if file was cleared (transitioned from a file to None)
-file_cleared = st.session_state.prev_file is not None and uploaded_file is None
-st.session_state.prev_file = uploaded_file
-
-if file_cleared:
-  st.markdown(
-      """
-        <div id="rubble-container" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; overflow: hidden;">
-            <div class="rubble-piece" style="left: 10%; animation: fall 1.5s ease-in forwards;">🧱</div>
-            <div class="rubble-piece" style="left: 25%; animation: fall 2.2s ease-in forwards;">🪨</div>
-            <div class="rubble-piece" style="left: 40%; animation: fall 1.8s ease-in forwards;">💥</div>
-            <div class="rubble-piece" style="left: 55%; animation: fall 2.5s ease-in forwards;">📦</div>
-            <div class="rubble-piece" style="left: 70%; animation: fall 1.9s ease-in forwards;">🪨</div>
-            <div class="rubble-piece" style="left: 85%; animation: fall 2.1s ease-in forwards;">🧱</div>
-        </div>
-        <style>
-        @keyframes fall {
-            0% { transform: translateY(-50px) rotate(0deg); opacity: 1; }
-            80% { transform: translateY(88vh) rotate(540deg); opacity: 1; }
-            100% { transform: translateY(90vh) rotate(580deg); opacity: 0; }
-        }
-        .rubble-piece {
-            position: absolute;
-            font-size: 28px;
-            top: 0;
-        }
-        </style>
-        <script>
-        setTimeout(() => {
-            const el = document.getElementById('rubble-container');
-            if (el) el.remove();
-        }, 10000);
-        </script>
-        """,
-      unsafe_allow_html=True,
-  )
-  st.toast("💥 File shattered into rubble and cleared!", icon="🧹")
 
 detected_zone = None
 detected_epsg = None
@@ -249,6 +207,7 @@ if uploaded_file is not None:
           else:
             temp_gdf = temp_gdf.to_crs(epsg=4326)
           centroid = temp_gdf.unary_union.centroid
+          # Automatic East/West Zone boundary judgment based on longitude
           if centroid.x >= -83.25:
             detected_zone = "East"
             detected_epsg = 2239
