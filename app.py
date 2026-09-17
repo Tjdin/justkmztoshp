@@ -7,7 +7,7 @@ import folium
 from streamlit_folium import st_folium
 
 st.set_page_config(
-    page_title="GA KML/KMZ to Shapefile Converter", page_icon="🌍", layout="wide"
+    page_title="GA KML/KMZ to Shapefile Converter", layout="wide"
 )
 
 # Custom CSS Theme - Dark/Engineering Tech Vibe
@@ -76,13 +76,6 @@ st.markdown("""
         padding: 16px;
         margin: 8px;
     }
-
-    /* Progress stepper styling */
-    .stepper-step {
-        display: inline-block;
-        width: 100%;
-        margin: 10px 0;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -92,19 +85,6 @@ st.markdown(
     " US Survey Feet)** shapefiles optimized for MicroStation and OpenRoads with"
     " official GDOT level standards mapping."
 )
-
-# Progress Stepper UI
-st.markdown("### 📋 Workflow Progress")
-cols = st.columns(3)
-with cols[0]:
-    st.markdown("#### ✅ Step 1: Upload File")
-    st.caption("Active / Upload your KML/KMZ")
-with cols[1]:
-    st.markdown("#### ⏳ Step 2: Configure Zone")
-    st.caption("Select county or override zone")
-with cols[2]:
-    st.markdown("#### 📥 Step 3: Export Result")
-    st.caption("Download your shapefile bundle")
 
 # Comprehensive dictionary mapping GA counties to their NAD83 State Plane Zone EPSG codes
 GA_COUNTY_ZONES = {
@@ -360,7 +340,7 @@ if temp_gdf is not None and not temp_gdf.empty:
 
   with metric_cols[0]:
     st.metric(
-        label="🔷 Total Features",
+        label="Total Features",
         value=file_stats["features"],
         delta=None
     )
@@ -369,7 +349,7 @@ if temp_gdf is not None and not temp_gdf.empty:
     feature_type_str = ", ".join([f"{k}s: {v}" for k, v in file_stats["feature_types"].items()])
     st.markdown(f"""
     <div class="metric-card">
-        <strong>📍 Geometry Types</strong><br>
+        <strong>Geometry Types</strong><br>
         <span class="tech-data">{feature_type_str}</span>
     </div>
     """, unsafe_allow_html=True)
@@ -378,7 +358,7 @@ if temp_gdf is not None and not temp_gdf.empty:
     bounds = file_stats["bounds"]
     st.markdown(f"""
     <div class="metric-card">
-        <strong>📐 Bounding Box</strong><br>
+        <strong>Bounding Box</strong><br>
         <span class="tech-data">
         Lat: [{bounds[1]:.4f}, {bounds[3]:.4f}]<br>
         Lon: [{bounds[0]:.4f}, {bounds[2]:.4f}]
@@ -388,13 +368,13 @@ if temp_gdf is not None and not temp_gdf.empty:
 
   with metric_cols[3]:
     st.metric(
-        label="💾 File Size",
+        label="File Size",
         value=f"{file_stats['size_kb']:.1f} KB",
         delta=None
     )
 
-st.markdown("### ⚙️ County & Zone Configuration")
-st.markdown("_Step 2: Configure your target projection zone and county mapping._")
+st.markdown("### County & Zone Configuration")
+st.markdown("_Configure your target projection zone and county mapping._")
 
 multi_county = st.checkbox("My data crosses multiple counties")
 sorted_counties = sorted(list(GA_COUNTY_ZONES.keys()))
@@ -440,7 +420,7 @@ else:
         else "Georgia West (EPSG: 2240)"
     )
     st.success(
-        f"📍 **{selected_county} County** selected -> **{zone_name}** (US Survey"
+        f"**{selected_county} County** selected -> **{zone_name}** (US Survey"
         " Feet)"
     )
 
@@ -472,7 +452,7 @@ else:
     user_chosen_zone = "East" if chosen_epsg == 2239 else "West"
     if user_chosen_zone != detected_zone:
       st.warning(
-          f"⚠️ **GDOT Compliance Warning:** Your uploaded file geometry maps"
+          f"**GDOT Compliance Warning:** Your uploaded file geometry maps"
           f" to the **{detected_zone} Zone**, but you manually selected the"
           f" **{user_chosen_zone} Zone**. Per the [GDOT MicroStation CAD and"
           " WMS Imagery Services Manual (Page 4"
@@ -494,12 +474,11 @@ feature_selection = st.selectbox(
     label_visibility="collapsed",
 )
 
-# Export Section with Visual Divider
 st.markdown("---")
-st.markdown("### 📥 Step 3: Export Your Results")
+st.markdown("### Export Your Results")
 st.markdown("_Click below to generate and download your GA State Plane shapefiles._")
 
-if uploaded_file is not None and st.button("🚀 Convert to Shapefile (.zip)", key="convert_btn"):
+if uploaded_file is not None and st.button("Convert to Shapefile (.zip)", key="convert_btn"):
   if multi_county and not selected_counties:
     st.error("Please select at least one county.")
     st.stop()
@@ -542,7 +521,7 @@ if uploaded_file is not None and st.button("🚀 Convert to Shapefile (.zip)", k
 
         if multi_county and set(target_epsgs) == {2239, 2240}:
           st.write(
-              "✂️ Selected counties span both East and West zones. Splitting"
+              "Selected counties span both East and West zones. Splitting"
               " dataset across zones..."
           )
           centroids = gdf.geometry.centroid
@@ -564,10 +543,10 @@ if uploaded_file is not None and st.button("🚀 Convert to Shapefile (.zip)", k
             with open(east_zip, "rb") as f:
               east_bytes = f.read()
 
-            st.success("✅ East Zone dataset created successfully!")
+            st.success("East Zone dataset created successfully!")
             st.download_button(
                 label=(
-                    "📥 Download East Zone Shapefiles (.zip) [EPSG:2239 - US"
+                    "Download East Zone Shapefiles (.zip) [EPSG:2239 - US"
                     " Ft]"
                 ),
                 data=east_bytes,
@@ -594,10 +573,10 @@ if uploaded_file is not None and st.button("🚀 Convert to Shapefile (.zip)", k
             with open(west_zip, "rb") as f:
               west_bytes = f.read()
 
-            st.success("✅ West Zone dataset created successfully!")
+            st.success("West Zone dataset created successfully!")
             st.download_button(
                 label=(
-                    "📥 Download West Zone Shapefiles (.zip) [EPSG:2240 - US"
+                    "Download West Zone Shapefiles (.zip) [EPSG:2240 - US"
                     " Ft]"
                 ),
                 data=west_bytes,
@@ -634,7 +613,7 @@ if uploaded_file is not None and st.button("🚀 Convert to Shapefile (.zip)", k
           st.success(f"Conversion successful using **{zone_label}**!")
 
           st.download_button(
-              label="📥 Download Zipped Shapefiles (.zip)",
+              label="Download Zipped Shapefiles (.zip)",
               data=zip_bytes,
               file_name="GA_OpenRoads_Shapefiles.zip",
               mime="application/zip",
@@ -645,7 +624,7 @@ if uploaded_file is not None and st.button("🚀 Convert to Shapefile (.zip)", k
 
 # --- How Does This Work Section ---
 st.markdown("---")
-st.markdown("### 📖 How Does This Work?")
+st.markdown("### How Does This Work?")
 
 tab_eli5, tab_tech = st.tabs(
     ["Explain Like I'm 5", "Technical Deep Dive"]
