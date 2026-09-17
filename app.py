@@ -41,31 +41,12 @@ st.markdown("""
         }
     }
 
-    /* Circulating neon laser border on the file uploader */
+    /* Base file uploader card (ring is applied dynamically, see below) */
     .stFileUploader {
         position: relative;
-        border: none;
         border-radius: 12px;
         padding: 20px;
         background: rgba(10, 14, 39, 0.85);
-        z-index: 1;
-    }
-
-    .stFileUploader::before,
-    .stFileUploader::after {
-        content: '';
-        position: absolute;
-        inset: -3px;
-        border-radius: 14px;
-        background: linear-gradient(45deg, #00f0ff, #00ff9d, #0085ff, #00ffc8, #00f0ff, #00ff9d);
-        background-size: 400% 400%;
-        z-index: -1;
-        animation: neon-cycle 6s linear infinite;
-    }
-
-    .stFileUploader::after {
-        filter: blur(18px);
-        opacity: 0.75;
     }
 
     @keyframes neon-cycle {
@@ -120,8 +101,7 @@ st.markdown("""
 st.title("I literally just want this kmz to reference in the right place")
 st.markdown(
     "Convert Google Earth files (`.kml`/`.kmz`) into **GA State Plane (NAD83,"
-    " US Survey Feet)** shapefiles optimized for MicroStation and OpenRoads with"
-    " official GDOT level standards mapping."
+    " US Survey Feet)** shapefiles optimized for MicroStation and OpenRoads "
 )
 
 # Comprehensive dictionary mapping GA counties to their NAD83 State Plane Zone EPSG codes
@@ -296,6 +276,40 @@ uploaded_file = st.file_uploader("Choose a KML or KMZ file", type=["kml", "kmz"]
 if uploaded_file is not None:
   st.session_state.file_ever_uploaded = True
 
+# The animated neon ring highlights whichever section is the current step:
+# the uploader until a file has been uploaded, then the zone config section.
+ring_selector = (
+    '.stFileUploader'
+    if not st.session_state.file_ever_uploaded
+    else 'div[data-testid="stVerticalBlock"]:has(> div.zone-neon-marker)'
+)
+st.markdown(
+    f"""
+    <style>
+    {ring_selector} {{
+        position: relative;
+        border-radius: 12px;
+    }}
+    {ring_selector}::before {{
+        content: '';
+        position: absolute;
+        inset: -3px;
+        border-radius: 14px;
+        padding: 3px;
+        background: linear-gradient(45deg, #00f0ff, #00ff9d, #0085ff, #00ffc8, #00f0ff, #00ff9d);
+        background-size: 400% 400%;
+        -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+        -webkit-mask-composite: xor;
+        mask-composite: exclude;
+        animation: neon-cycle 6s linear infinite;
+        pointer-events: none;
+        z-index: 5;
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 detected_zone = None
 detected_epsg = None
 temp_gdf = None
@@ -418,93 +432,95 @@ if temp_gdf is not None and not temp_gdf.empty:
     )
 
 if st.session_state.file_ever_uploaded:
-  st.markdown("### County & Zone Configuration")
-  st.markdown("_Configure your target projection zone and county mapping._")
+  with st.container():
+    st.markdown('<div class="zone-neon-marker"></div>', unsafe_allow_html=True)
+    st.markdown("### County & Zone Configuration")
+    st.markdown("_Configure your target projection zone and county mapping._")
 
-  multi_county = st.checkbox("My data crosses multiple counties")
-  sorted_counties = sorted(list(GA_COUNTY_ZONES.keys()))
-  target_epsgs = []
+    multi_county = st.checkbox("My data crosses multiple counties")
+    sorted_counties = sorted(list(GA_COUNTY_ZONES.keys()))
+    target_epsgs = []
 
-  if multi_county:
-    selected_counties = st.multiselect(
-        "Select all counties your project crosses:",
-        sorted_counties,
-        default=[],
-        placeholder="Search and select counties...",
-    )
-    if selected_counties:
-      target_epsgs = list(
-          set(GA_COUNTY_ZONES[county] for county in selected_counties)
+    if multi_county:
+      selected_counties = st.multiselect(
+          "Select all counties your project crosses:",
+          sorted_counties,
+          default=[],
+          placeholder="Search and select counties...",
       )
-      zones_display = ", ".join(
-          [
-              "East Zone (2239)" if z == 2239 else "West Zone (2240)"
-              for z in target_epsgs
-          ]
-      )
-      st.info(
-          f"Selected counties cover: **{zones_display}**."
-          " If both zones are represented, the app will automatically split and"
-          " export separate East and West zip bundles."
-      )
-    else:
-      st.warning("Please select at least one county for your multi-county run.")
-  else:
-    selected_county = st.selectbox(
-        "Georgia County (Optional):",
-        sorted_counties,
-        index=None,
-        placeholder="Click to type or select a county...",
-    )
-
-    if selected_county:
-      county_epsg = GA_COUNTY_ZONES[selected_county]
-      zone_name = (
-          "Georgia East (EPSG: 2239)"
-          if county_epsg == 2239
-          else "Georgia West (EPSG: 2240)"
-      )
-      st.success(
-          f"**{selected_county} County** selected -> **{zone_name}** (US Survey"
-          " Feet)"
-      )
-
-    zone_override = st.selectbox(
-        "Coordinate System Zone (Override):",
-        [
-            "Auto-Detect / Match File Location",
-            "Georgia East Zone (EPSG: 2239 - US Ft)",
-            "Georgia West Zone (EPSG: 2240 - US Ft)",
-        ],
-    )
-
-    if selected_county:
-      target_epsgs = [GA_COUNTY_ZONES[selected_county]]
-    elif zone_override == "Georgia East Zone (EPSG: 2239 - US Ft)":
-      target_epsgs = [2239]
-    elif zone_override == "Georgia West Zone (EPSG: 2240 - US Ft)":
-      target_epsgs = [2240]
-    elif detected_epsg is not None:
-      target_epsgs = [detected_epsg]
-    else:
-      target_epsgs = [2240]
-
-    if (
-        detected_epsg is not None
-        and zone_override != "Auto-Detect / Match File Location"
-    ):
-      chosen_epsg = target_epsgs[0]
-      user_chosen_zone = "East" if chosen_epsg == 2239 else "West"
-      if user_chosen_zone != detected_zone:
-        st.warning(
-            f"**GDOT Compliance Warning:** Your uploaded file geometry maps"
-            f" to the **{detected_zone} Zone**, but you manually selected the"
-            f" **{user_chosen_zone} Zone**. Per the [GDOT MicroStation CAD and"
-            " WMS Imagery Services Manual (Page 4"
-            " Map)](https://www.dot.ga.gov/PartnerSmart/DesignManuals/ElectronicData/GDOT_MicroStation-Cad-WMS-Imagery-Services.pdf),"
-            " using a zone contrary to your geographic location will introduce"
-            " linear distortions and alignment shifts in OpenRoads."
+      if selected_counties:
+        target_epsgs = list(
+            set(GA_COUNTY_ZONES[county] for county in selected_counties)
         )
+        zones_display = ", ".join(
+            [
+                "East Zone (2239)" if z == 2239 else "West Zone (2240)"
+                for z in target_epsgs
+            ]
+        )
+        st.info(
+            f"Selected counties cover: **{zones_display}**."
+            " If both zones are represented, the app will automatically split and"
+            " export separate East and West zip bundles."
+        )
+      else:
+        st.warning("Please select at least one county for your multi-county run.")
+    else:
+      selected_county = st.selectbox(
+          "Georgia County (Optional):",
+          sorted_counties,
+          index=None,
+          placeholder="Click to type or select a county...",
+      )
+
+      if selected_county:
+        county_epsg = GA_COUNTY_ZONES[selected_county]
+        zone_name = (
+            "Georgia East (EPSG: 2239)"
+            if county_epsg == 2239
+            else "Georgia West (EPSG: 2240)"
+        )
+        st.success(
+            f"**{selected_county} County** selected -> **{zone_name}** (US Survey"
+            " Feet)"
+        )
+
+      zone_override = st.selectbox(
+          "Coordinate System Zone (Override):",
+          [
+              "Auto-Detect / Match File Location",
+              "Georgia East Zone (EPSG: 2239 - US Ft)",
+              "Georgia West Zone (EPSG: 2240 - US Ft)",
+          ],
+      )
+
+      if selected_county:
+        target_epsgs = [GA_COUNTY_ZONES[selected_county]]
+      elif zone_override == "Georgia East Zone (EPSG: 2239 - US Ft)":
+        target_epsgs = [2239]
+      elif zone_override == "Georgia West Zone (EPSG: 2240 - US Ft)":
+        target_epsgs = [2240]
+      elif detected_epsg is not None:
+        target_epsgs = [detected_epsg]
+      else:
+        target_epsgs = [2240]
+
+      if (
+          detected_epsg is not None
+          and zone_override != "Auto-Detect / Match File Location"
+      ):
+        chosen_epsg = target_epsgs[0]
+        user_chosen_zone = "East" if chosen_epsg == 2239 else "West"
+        if user_chosen_zone != detected_zone:
+          st.warning(
+              f"**GDOT Compliance Warning:** Your uploaded file geometry maps"
+              f" to the **{detected_zone} Zone**, but you manually selected the"
+              f" **{user_chosen_zone} Zone**. Per the [GDOT MicroStation CAD and"
+              " WMS Imagery Services Manual (Page 4"
+              " Map)](https://www.dot.ga.gov/PartnerSmart/DesignManuals/ElectronicData/GDOT_MicroStation-Cad-WMS-Imagery-Services.pdf),"
+              " using a zone contrary to your geographic location will introduce"
+              " linear distortions and alignment shifts in OpenRoads."
+          )
 
   feature_selection = st.selectbox(
       "Optional Export Level",
