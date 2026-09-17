@@ -466,24 +466,13 @@ if st.session_state.file_ever_uploaded:
       else:
         st.warning("Please select at least one county for your multi-county run.")
     else:
-      selected_county = st.selectbox(
-          "Georgia County (Optional):",
-          sorted_counties,
-          index=None,
-          placeholder="Click to type or select a county...",
-      )
-
-      if selected_county:
-        county_epsg = GA_COUNTY_ZONES[selected_county]
-        zone_name = (
-            "Georgia East (EPSG: 2239)"
-            if county_epsg == 2239
-            else "Georgia West (EPSG: 2240)"
+      if detected_epsg is not None:
+        detected_zone_name = (
+            "Georgia East Zone (EPSG: 2239)"
+            if detected_epsg == 2239
+            else "Georgia West Zone (EPSG: 2240)"
         )
-        st.success(
-            f"**{selected_county} County** selected -> **{zone_name}** (US Survey"
-            " Feet)"
-        )
+        st.success(f"Detected: **{detected_zone_name}** (US Survey Feet)")
 
       zone_override = st.selectbox(
           "Coordinate System Zone (Override):",
@@ -493,6 +482,25 @@ if st.session_state.file_ever_uploaded:
               "Georgia West Zone (EPSG: 2240 - US Ft)",
           ],
       )
+
+      selected_county = st.selectbox(
+          "Georgia County (Optional Override):",
+          sorted_counties,
+          index=None,
+          placeholder="Only needed if a specific county should override the zone...",
+      )
+
+      if selected_county:
+        county_epsg = GA_COUNTY_ZONES[selected_county]
+        zone_name = (
+            "Georgia East (EPSG: 2239)"
+            if county_epsg == 2239
+            else "Georgia West (EPSG: 2240)"
+        )
+        st.info(
+            f"**{selected_county} County** override selected -> **{zone_name}**"
+            " (US Survey Feet)"
+        )
 
       if selected_county:
         target_epsgs = [GA_COUNTY_ZONES[selected_county]]
