@@ -325,33 +325,37 @@ if uploaded_file is not None:
 
 # Display Map Preview if file was parsed successfully
 if temp_gdf is not None and not temp_gdf.empty:
-  st.markdown("### 🗺️ Interactive Map Preview")
+  st.markdown("### Spatial Data Preview")
   st.markdown("_Verify your geometry is in the correct location before converting._")
 
+  # Calculate bounds/center for the map
+  bounds = file_stats["bounds"]  # [xmin, ymin, xmax, ymax]
+  center_y = (bounds[1] + bounds[3]) / 2
+  center_x = (bounds[0] + bounds[2]) / 2
+
+  # Create a Folium map centered on the data (no API key required)
   m = folium.Map(
-      location=[temp_gdf.unary_union.centroid.y, temp_gdf.unary_union.centroid.x],
-      zoom_start=7,
-      tiles="CartoDB positron"
+      location=[center_y, center_x],
+      zoom_start=11,
+      tiles="OpenStreetMap",
   )
 
-  for idx, row in temp_gdf.iterrows():
-    if row.geometry.geom_type == 'Polygon' or row.geometry.geom_type == 'MultiPolygon':
-      folium.GeoJson(row.geometry, color='cyan', weight=2, opacity=0.7).add_to(m)
-    elif row.geometry.geom_type == 'LineString' or row.geometry.geom_type == 'MultiLineString':
-      folium.GeoJson(row.geometry, color='lime', weight=3, opacity=0.7).add_to(m)
-    elif row.geometry.geom_type == 'Point' or row.geometry.geom_type == 'MultiPoint':
-      folium.Circle(
-          location=[row.geometry.y, row.geometry.x],
-          radius=1000,
-          color='orange',
-          fill=True,
-          opacity=0.7
-      ).add_to(m)
+  # Add the GeoDataFrame geometries to the map
+  folium.GeoJson(
+      temp_gdf.to_crs(epsg=4326),
+      name="Uploaded Features",
+      style_function=lambda x: {
+          "color": "#00f0ff",
+          "weight": 3,
+          "fillColor": "#00f0ff",
+          "fillOpacity": 0.2,
+      },
+  ).add_to(m)
 
-  st_folium(m, width=None, height=400)
+  st_folium(m, width="100%", height=400)
 
   # Metrics Dashboard - Glassmorphism Style
-  st.markdown("### 📊 File Statistics Dashboard")
+  st.markdown("### File Statistics Dashboard")
   metric_cols = st.columns(4)
 
   with metric_cols[0]:
