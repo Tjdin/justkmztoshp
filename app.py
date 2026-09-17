@@ -3,10 +3,88 @@ import tempfile
 import zipfile
 import geopandas as gpd
 import streamlit as st
+import folium
+from streamlit_folium import st_folium
 
 st.set_page_config(
-    page_title="GA KML/KMZ to Shapefile Converter", page_icon="🌍"
+    page_title="GA KML/KMZ to Shapefile Converter", page_icon="🌍", layout="wide"
 )
+
+# Custom CSS Theme - Dark/Engineering Tech Vibe
+st.markdown("""
+<style>
+    /* Dark engineering theme */
+    :root {
+        --primary-color: #00d4ff;
+        --secondary-color: #1e3a5f;
+        --accent-color: #ff6b35;
+        --text-color: #e0e0e0;
+        --bg-dark: #0a0e27;
+    }
+
+    body {
+        background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+        color: #e0e0e0;
+    }
+
+    /* Glow effects on containers */
+    .stFileUploader {
+        border: 2px solid #00d4ff;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 0 20px rgba(0, 212, 255, 0.3), inset 0 0 10px rgba(0, 212, 255, 0.1);
+        background: rgba(10, 14, 39, 0.8);
+    }
+
+    /* Download button gradient */
+    .stButton > button {
+        background: linear-gradient(135deg, #00d4ff 0%, #0085cc 100%);
+        color: #0a0e27;
+        border: none;
+        border-radius: 8px;
+        font-weight: bold;
+        padding: 10px 20px;
+        transition: all 0.3s ease;
+        box-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
+    }
+
+    .stButton > button:hover {
+        box-shadow: 0 0 25px rgba(0, 212, 255, 0.6);
+        transform: translateY(-2px);
+    }
+
+    /* Card styling */
+    .stInfo, .stSuccess, .stWarning {
+        border-radius: 12px;
+        border-left: 4px solid #00d4ff;
+        background: rgba(0, 212, 255, 0.05);
+    }
+
+    /* Monospace for technical data */
+    .tech-data {
+        font-family: 'Courier New', monospace;
+        color: #00d4ff;
+        font-weight: bold;
+    }
+
+    /* Glassmorphism effect for metrics */
+    .metric-card {
+        backdrop-filter: blur(10px);
+        background: rgba(30, 58, 95, 0.4);
+        border: 1px solid rgba(0, 212, 255, 0.2);
+        border-radius: 12px;
+        padding: 16px;
+        margin: 8px;
+    }
+
+    /* Progress stepper styling */
+    .stepper-step {
+        display: inline-block;
+        width: 100%;
+        margin: 10px 0;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 st.title("I literally just want this kmz to reference in the right place")
 st.markdown(
@@ -14,6 +92,19 @@ st.markdown(
     " US Survey Feet)** shapefiles optimized for MicroStation and OpenRoads with"
     " official GDOT level standards mapping."
 )
+
+# Progress Stepper UI
+st.markdown("### 📋 Workflow Progress")
+cols = st.columns(3)
+with cols[0]:
+    st.markdown("#### ✅ Step 1: Upload File")
+    st.caption("Active / Upload your KML/KMZ")
+with cols[1]:
+    st.markdown("#### ⏳ Step 2: Configure Zone")
+    st.caption("Select county or override zone")
+with cols[2]:
+    st.markdown("#### 📥 Step 3: Export Result")
+    st.caption("Download your shapefile bundle")
 
 # Comprehensive dictionary mapping GA counties to their NAD83 State Plane Zone EPSG codes
 GA_COUNTY_ZONES = {
@@ -179,10 +270,12 @@ GA_COUNTY_ZONES = {
     "Worth": 2240,
 }
 
-uploaded_file = st.file_uploader("Choose a KML or KMZ file", type=["kml", "kmz"])
+uploaded_file = st.file_uploader("Choose a KML or KMZ file", type=["kml", "kmz"], key="uploader")
 
 detected_zone = None
 detected_epsg = None
+temp_gdf = None
+file_stats = None
 
 if uploaded_file is not None:
   with tempfile.TemporaryDirectory() as tmpdir:
@@ -206,18 +299,98 @@ if uploaded_file is not None:
             temp_gdf.set_crs(epsg=4326, inplace=True)
           else:
             temp_gdf = temp_gdf.to_crs(epsg=4326)
+
           centroid = temp_gdf.unary_union.centroid
-          # Automatic East/West Zone boundary judgment based on longitude
           if centroid.x >= -83.25:
             detected_zone = "East"
             detected_epsg = 2239
           else:
             detected_zone = "West"
             detected_epsg = 2240
-      except Exception:
-        pass
 
-st.markdown("### ⚙️ County & Zone Options")
+          # Calculate file statistics
+          bounds = temp_gdf.total_bounds
+          file_size_kb = len(uploaded_file.getvalue()) / 1024
+          feature_types = temp_gdf.geometry.type.value_counts().to_dict()
+          file_stats = {
+              "features": len(temp_gdf),
+              "feature_types": feature_types,
+              "bounds": bounds,
+              "size_kb": file_size_kb,
+              "centroid": centroid
+          }
+      except Exception as e:
+        st.error(f"Error reading file: {e}")
+        temp_gdf = None
+
+# Display Map Preview if file was parsed successfully
+if temp_gdf is not None and not temp_gdf.empty:
+  st.markdown("### 🗺️ Interactive Map Preview")
+  st.markdown("_Verify your geometry is in the correct location before converting._")
+
+  m = folium.Map(
+      location=[temp_gdf.unary_union.centroid.y, temp_gdf.unary_union.centroid.x],
+      zoom_start=7,
+      tiles="CartoDB positron"
+  )
+
+  for idx, row in temp_gdf.iterrows():
+    if row.geometry.geom_type == 'Polygon' or row.geometry.geom_type == 'MultiPolygon':
+      folium.GeoJson(row.geometry, color='cyan', weight=2, opacity=0.7).add_to(m)
+    elif row.geometry.geom_type == 'LineString' or row.geometry.geom_type == 'MultiLineString':
+      folium.GeoJson(row.geometry, color='lime', weight=3, opacity=0.7).add_to(m)
+    elif row.geometry.geom_type == 'Point' or row.geometry.geom_type == 'MultiPoint':
+      folium.Circle(
+          location=[row.geometry.y, row.geometry.x],
+          radius=1000,
+          color='orange',
+          fill=True,
+          opacity=0.7
+      ).add_to(m)
+
+  st_folium(m, width=None, height=400)
+
+  # Metrics Dashboard - Glassmorphism Style
+  st.markdown("### 📊 File Statistics Dashboard")
+  metric_cols = st.columns(4)
+
+  with metric_cols[0]:
+    st.metric(
+        label="🔷 Total Features",
+        value=file_stats["features"],
+        delta=None
+    )
+
+  with metric_cols[1]:
+    feature_type_str = ", ".join([f"{k}s: {v}" for k, v in file_stats["feature_types"].items()])
+    st.markdown(f"""
+    <div class="metric-card">
+        <strong>📍 Geometry Types</strong><br>
+        <span class="tech-data">{feature_type_str}</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+  with metric_cols[2]:
+    bounds = file_stats["bounds"]
+    st.markdown(f"""
+    <div class="metric-card">
+        <strong>📐 Bounding Box</strong><br>
+        <span class="tech-data">
+        Lat: [{bounds[1]:.4f}, {bounds[3]:.4f}]<br>
+        Lon: [{bounds[0]:.4f}, {bounds[2]:.4f}]
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+
+  with metric_cols[3]:
+    st.metric(
+        label="💾 File Size",
+        value=f"{file_stats['size_kb']:.1f} KB",
+        delta=None
+    )
+
+st.markdown("### ⚙️ County & Zone Configuration")
+st.markdown("_Step 2: Configure your target projection zone and county mapping._")
 
 multi_county = st.checkbox("My data crosses multiple counties")
 sorted_counties = sorted(list(GA_COUNTY_ZONES.keys()))
@@ -317,7 +490,12 @@ feature_selection = st.selectbox(
     label_visibility="collapsed",
 )
 
-if uploaded_file is not None and st.button("Convert to Shapefile (.zip)"):
+# Export Section with Visual Divider
+st.markdown("---")
+st.markdown("### 📥 Step 3: Export Your Results")
+st.markdown("_Click below to generate and download your GA State Plane shapefiles._")
+
+if uploaded_file is not None and st.button("🚀 Convert to Shapefile (.zip)", key="convert_btn"):
   if multi_county and not selected_counties:
     st.error("Please select at least one county.")
     st.stop()
