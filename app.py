@@ -547,7 +547,23 @@ if st.session_state.file_ever_uploaded:
   st.markdown("### Export Your Results")
   st.markdown("_Click below to generate and download your GA State Plane shapefiles._")
 
-  if uploaded_file is not None and st.button("Convert to Shapefile (.zip)", key="convert_btn"):
+  convert_clicked = st.button("Convert to Shapefile (.zip)", key="convert_btn")
+
+  if multi_county and set(target_epsgs) == {2239, 2240}:
+    default_filename_preview = "GA_East_Zone_OpenRoads.zip / GA_West_Zone_OpenRoads.zip"
+  else:
+    default_filename_preview = "GA_OpenRoads_Shapefiles.zip"
+
+  custom_filename = st.text_input(
+      "Output File Name (Optional)",
+      value="",
+      placeholder=f"Leave blank to use default: {default_filename_preview}",
+  )
+  custom_filename_base = custom_filename.strip()
+  if custom_filename_base.lower().endswith(".zip"):
+    custom_filename_base = custom_filename_base[:-4]
+
+  if uploaded_file is not None and convert_clicked:
     if multi_county and not selected_counties:
       st.error("Please select at least one county.")
       st.stop()
@@ -619,7 +635,11 @@ if st.session_state.file_ever_uploaded:
                       " Ft]"
                   ),
                   data=east_bytes,
-                  file_name="GA_East_Zone_OpenRoads.zip",
+                  file_name=(
+                      f"{custom_filename_base}_East_Zone.zip"
+                      if custom_filename_base
+                      else "GA_East_Zone_OpenRoads.zip"
+                  ),
                   mime="application/zip",
               )
             else:
@@ -649,7 +669,11 @@ if st.session_state.file_ever_uploaded:
                       " Ft]"
                   ),
                   data=west_bytes,
-                  file_name="GA_West_Zone_OpenRoads.zip",
+                  file_name=(
+                      f"{custom_filename_base}_West_Zone.zip"
+                      if custom_filename_base
+                      else "GA_West_Zone_OpenRoads.zip"
+                  ),
                   mime="application/zip",
               )
             else:
@@ -684,7 +708,11 @@ if st.session_state.file_ever_uploaded:
             st.download_button(
                 label="Download Zipped Shapefiles (.zip)",
                 data=zip_bytes,
-                file_name="GA_OpenRoads_Shapefiles.zip",
+                file_name=(
+                    f"{custom_filename_base}.zip"
+                    if custom_filename_base
+                    else "GA_OpenRoads_Shapefiles.zip"
+                ),
                 mime="application/zip",
             )
 
