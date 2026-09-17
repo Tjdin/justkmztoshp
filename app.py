@@ -723,26 +723,29 @@ if st.session_state.file_ever_uploaded:
 st.markdown("---")
 st.markdown("### How Does This Work?")
 
-tab_eli5, tab_tech = st.tabs(
-    ["Explain Like I'm 5", "Technical Deep Dive"]
-)
-
-with tab_eli5:
+with st.expander("Explain Like I'm 5", expanded=False):
   st.markdown("""
-    Imagine you draw a picture on a flat piece of paper (Google Earth global coordinates), but your engineering software needs that same picture wrapped precisely over a 3D model of Georgia using measuring tapes marked in feet. 
-    
+    Imagine you draw a picture on a flat piece of paper (Google Earth global coordinates), but your engineering software needs that same picture wrapped precisely over a 3D model of Georgia using measuring tapes marked in feet.
+
     1. **Unpacking the Box:** If your file is a `.kmz`, it's like a zipped toy box. We open it up to find the drawing inside (`.kml`).
     2. **Finding Where You Are:** We look at where your drawing sits on the map. If it's on the right side of Georgia, we prep it for the **East Zone**. If it's on the left, we prep it for the **West Zone**.
     3. **Changing the Units:** We take your drawing's global GPS coordinates and recalculate every single point into precise **US Survey Feet** so your engineering design software doesn't get confused.
     4. **Packing It Up:** We package your freshly converted drawing into a tidy little zip folder containing all the special files engineering software needs to read it smoothly!
     """)
 
-with tab_tech:
+with st.expander("Technical Deep Dive", expanded=False):
   st.markdown("""
     Under the hood, the application processes spatial vector geometries through a secure, containerized Python runtime environment using geospatial libraries:
-    
+
     * **File Decompression & Parsing:** KMZ archives are unpacked via Python's built-in `zipfile` module to extract raw XML-based KML payloads, which are ingested via `geopandas`.
     * **Spatial Centroid Calculation & Zone Auto-Detection:** The engine computes the global bounding box centroid (`unary_union.centroid`) of the imported geometries in latitude/longitude (EPSG:4326). It evaluates longitude against Georgia's state-plane demarcation meridian (~ -83.25° W) to automatically classify features into **Georgia East Zone (EPSG:2239)** or **Georgia West Zone (EPSG:2240)**.
     * **Coordinate Reference System (CRS) Transformation:** Geometries are mathematically re-projected from global geodetic coordinates to NAD83 State Plane coordinates measured in **US Survey Feet**, preserving engineering-grade linear accuracy required by GDOT specifications.
     * **Attribute Mapping & Serialization:** Optional level designations populate standardized schema headers (`Level`, `Feature`, `Name`, `GDOT_Lvl`). Features are serialized into ESRI Shapefile format components (`.shp`, `.shx`, `.dbf`, `.prj`, `.cpg`) and bundled into an in-memory ZIP stream for direct user retrieval.
+    """)
+
+with st.expander("Explain Like I'm 1", expanded=False):
+  st.markdown("""
+    Gaga. Bababa! Kml go squish squish, unzip, pop! Wiggle wiggle map, dis way, dat way.
+    Feetsies not meters, nuh-uh. Zoom zoom, plop plop, zip-zip go bye-bye, download, yaaay!
+    Googoo gaga, all done, gaga!
     """)
